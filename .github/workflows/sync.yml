@@ -34,11 +34,19 @@ jobs:
             git reset --hard upstream/main
             git push --force-with-lease origin main
           else
-            # 有本地修改，保持原来的合并方式，不覆盖任何人的改动
-            if ! git pull --no-rebase upstream main; then
+            # 有本地修改，合并上游变更但不自动提交（需要保护 workflow 文件）
+            if ! git merge --no-commit --no-ff upstream/main; then
               echo "[Error] 合并上游变更产生冲突，自动同步已暂停，请手动 Sync Fork 并解决冲突。"
               echo "[Error] Merge conflict detected while syncing upstream. Please sync your fork manually and resolve the conflicts."
+              git merge --abort
               exit 1
             fi
-            git push origin main
+            # 保留自己的 workflow 文件（GITHUB_TOKEN 无 workflows 写权限，推送上游 workflow 变更会被拒绝）
+            git checkout HEAD -- .github/workflows/
+            if git diff --cached --quiet; then
+              echo "No changes to sync after preserving workflow files."
+            else
+              git commit -m "Sync from upstream cmliu/edgetunnel (workflows excluded)"
+              git push origin main
+            fi
           fi
